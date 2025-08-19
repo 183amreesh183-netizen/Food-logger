@@ -1,0 +1,222 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Food Logger</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h2 { margin-top: 30px; }
+    .food-list, .log-list { margin: 10px 0; }
+    button { margin: 5px 0; padding: 8px 12px; }
+    input, select { padding: 6px; margin: 4px 0; width: 100%; }
+    .food-item { border-bottom: 1px solid #ccc; padding: 5px 0; }
+    .tabs { display: flex; margin-bottom: 10px; }
+    .tab { flex: 1; padding: 10px; text-align: center; background: #eee; cursor: pointer; }
+    .tab.active { background: #ccc; font-weight: bold; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+  <h1>🍴 Food Logger</h1>
+
+  <div class="tabs">
+    <div id="tab-log" class="tab active" onclick="switchTab('log')">Log</div>
+    <div id="tab-master" class="tab" onclick="switchTab('master')">Master List</div>
+    <div id="tab-export" class="tab" onclick="switchTab('export')">Export</div>
+  </div>
+
+  <!-- Log Tab -->
+  <div id="content-log">
+    <h2>Log Food</h2>
+    <label>Date: <input type="date" id="log-date"></label>
+    <br>
+    <label>Quick Entry (#id x qty, comma separated):</label>
+    <input type="text" id="quick-entry" placeholder="#3x2, #2x1">
+    <button onclick="quickAdd()">Add Quick Entry</button>
+    <h3>Quick Pick</h3>
+    <div id="quick-pick"></div>
+    <h3>Today's Log</h3>
+    <div id="today-log"></div>
+    <h3>Daily Totals</h3>
+    <div id="daily-totals"></div>
+  </div>
+
+  <!-- Master List Tab -->
+  <div id="content-master" class="hidden">
+    <h2>Master Food List</h2>
+    <div id="master-list"></div>
+    <h3>Add New Food</h3>
+    <input type="text" id="new-food-name" placeholder="Food name">
+    <button onclick="addFood()">Add Food</button>
+  </div>
+
+  <!-- Export Tab -->
+  <div id="content-export" class="hidden">
+    <h2>Export / Import</h2>
+    <button onclick="exportData()">Export JSON</button>
+    <button onclick="exportCSV()">Export CSV</button>
+    <br><br>
+    <textarea id="import-area" placeholder="Paste JSON here" rows="6" style="width:100%;"></textarea>
+    <button onclick="importData()">Import JSON</button>
+  </div>
+
+<script>
+let masterFoods = [
+  {"id":1,"name":"Upma"},
+  {"id":2,"name":"Milk"},
+  {"id":3,"name":"Besan cheela"},
+  {"id":4,"name":"Pineapple"},
+  {"id":5,"name":"Egg omelette"},
+  {"id":6,"name":"Egg white"},
+  {"id":7,"name":"Bread slice"},
+  {"id":8,"name":"Tofu"},
+  {"id":9,"name":"Dry dates (soaked)"},
+  {"id":10,"name":"Roasted grams"},
+  {"id":11,"name":"Chia seeds (soaked)"},
+  {"id":12,"name":"Rice"},
+  {"id":13,"name":"Dal"},
+  {"id":14,"name":"Cowpeas dal"},
+  {"id":15,"name":"Besan chapati"},
+  {"id":16,"name":"Sabji"},
+  {"id":17,"name":"Rajma"},
+  {"id":18,"name":"Milk tea"},
+  {"id":19,"name":"Black tea"},
+  {"id":20,"name":"Lemon"},
+  {"id":21,"name":"Multivitamin capsule"},
+  {"id":22,"name":"Roasted cowpeas"},
+  {"id":23,"name":"Poha"},
+  {"id":24,"name":"Curd"}
+];
+
+let logs = JSON.parse(localStorage.getItem("logs")||"{}");
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('[id^=content-]').forEach(c => c.classList.add('hidden'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  document.getElementById('content-'+tab).classList.remove('hidden');
+  if(tab==="log") renderLog();
+  if(tab==="master") renderMaster();
+}
+
+function renderMaster(){
+  let div=document.getElementById("master-list");
+  div.innerHTML="";
+  masterFoods.forEach(f=>{
+    let d=document.createElement("div");
+    d.className="food-item";
+    d.innerText="#"+f.id+" "+f.name;
+    div.appendChild(d);
+  });
+}
+
+function addFood(){
+  let name=document.getElementById("new-food-name").value.trim();
+  if(!name) return;
+  let id=masterFoods.length?Math.max(...masterFoods.map(f=>f.id))+1:1;
+  masterFoods.push({id,name});
+  document.getElementById("new-food-name").value="";
+  renderMaster();
+  renderQuickPick();
+}
+
+function renderQuickPick(){
+  let div=document.getElementById("quick-pick");
+  div.innerHTML="";
+  masterFoods.forEach(f=>{
+    let btn=document.createElement("button");
+    btn.innerText="#"+f.id+" "+f.name;
+    btn.onclick=()=>addLog(f.id,1);
+    div.appendChild(btn);
+  });
+}
+
+function getToday(){
+  let d=document.getElementById("log-date").value;
+  if(!d){ d=new Date().toISOString().slice(0,10); document.getElementById("log-date").value=d; }
+  return d;
+}
+
+function addLog(id,qty){
+  let date=getToday();
+  if(!logs[date]) logs[date]=[];
+  logs[date].push({id,qty});
+  saveLogs();
+  renderLog();
+}
+
+function quickAdd(){
+  let text=document.getElementById("quick-entry").value;
+  let parts=text.split(",");
+  parts.forEach(p=>{
+    let m=p.match(/#?(\d+)x?(\d*\.?\d+)?/);
+    if(m){
+      let id=parseInt(m[1]);
+      let qty=parseFloat(m[2]||1);
+      addLog(id,qty);
+    }
+  });
+  document.getElementById("quick-entry").value="";
+}
+
+function renderLog(){
+  let date=getToday();
+  let div=document.getElementById("today-log");
+  div.innerHTML="";
+  let items=logs[date]||[];
+  items.forEach((item,i)=>{
+    let f=masterFoods.find(x=>x.id===item.id);
+    let d=document.createElement("div");
+    d.innerText="#"+item.id+" "+(f?f.name:"?")+" x"+item.qty;
+    div.appendChild(d);
+  });
+  document.getElementById("daily-totals").innerText="Entries: "+items.length;
+}
+
+function saveLogs(){
+  localStorage.setItem("logs",JSON.stringify(logs));
+}
+
+function exportData(){
+  let data=JSON.stringify({masterFoods,logs},null,2);
+  let blob=new Blob([data],{type:"application/json"});
+  let url=URL.createObjectURL(blob);
+  let a=document.createElement("a");
+  a.href=url;a.download="food_logs.json";a.click();
+}
+
+function exportCSV(){
+  let rows=["date,id,name,qty"];
+  for(let d in logs){
+    logs[d].forEach(item=>{
+      let f=masterFoods.find(x=>x.id===item.id);
+      rows.push(`${d},${item.id},${f?f.name:""},${item.qty}`);
+    });
+  }
+  let blob=new Blob([rows.join("\n")],{type:"text/csv"});
+  let url=URL.createObjectURL(blob);
+  let a=document.createElement("a");
+  a.href=url;a.download="food_logs.csv";a.click();
+}
+
+function importData(){
+  try{
+    let data=JSON.parse(document.getElementById("import-area").value);
+    if(data.masterFoods) masterFoods=data.masterFoods;
+    if(data.logs) logs=data.logs;
+    saveLogs();
+    renderMaster();
+    renderQuickPick();
+    alert("Imported successfully!");
+  }catch(e){alert("Invalid JSON");}
+}
+
+renderQuickPick();
+renderMaster();
+renderLog();
+</script>
+</body>
+</html>
